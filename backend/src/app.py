@@ -12,7 +12,7 @@ from src.schemas.files import FileItem, FileUpdate, FilesPagination
 from src.schemas.question import QuestionRequest
 from src.database import get_db, STORAGE_DIR
 
-from src.tasks.files import check_file_extension, extract_file_metadata
+from src.tasks.files import check_file_extension, extract_file_metadata, create_file_embiddings, cleanup_after_failure
 from src.services.files import file_service
 from src.services.ai_service import ai_service
 
@@ -43,8 +43,9 @@ async def create_file_view(
     
     chain(
         check_file_extension.si(file_item.id), 
-        extract_file_metadata.si(file_item.id)
-    ).apply_async()
+        extract_file_metadata.si(file_item.id),
+        create_file_embiddings.si(file_item.id)
+    ).apply_async(link_error=cleanup_after_failure.s(file_item.id))
 
     return file_item
 
@@ -81,9 +82,9 @@ async def delete_file_view(file_id: str, session: AsyncSession = Depends(get_db)
     await file_service.delete_file(session=session, file_id=file_id)
 
 
-@app.post("/analyze", status_code=200)
+@app.post("/search", status_code=200)
 async def analyze_question(request: QuestionRequest):
-    ai_answer = await ai_service.generate(
+    ai_answer = await ai_service.analize(
         agent_id="classifier", 
         user_query=request.question
     )

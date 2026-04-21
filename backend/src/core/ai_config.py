@@ -1,13 +1,12 @@
 from src.schemas.ai_model import AiModelSettings
 import os
 
-
+CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR")
 AI_AGENTS = {
     "classifier": AiModelSettings(
         model_name="llama3",
         api_type = "ollama",
         base_url = os.getenv("OLLAMA_URL"),
-        endpoint = "/api/generate",
         temperature=0.0,
         system_prompt=(
             "Ты — аналитик. Разбери запрос пользователя на две части:\n"
@@ -17,4 +16,9 @@ AI_AGENTS = {
             "Ответ оставь на русском. Не решай задачу, только классифицируй."
         )
     ),
+    "embeddings": AiModelSettings(
+        model_name="nomic-embed-text",
+        api_type="ollama",
+        base_url=os.getenv("OLLAMA_URL"),
+    )
 }
