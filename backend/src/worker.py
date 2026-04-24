@@ -9,7 +9,7 @@ celery_app = Celery(
     "backend_worker",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["src.tasks.files"] 
+    include=["src.tasks.files", "src.tasks.search"] 
 )
 
 def run_async(coro):

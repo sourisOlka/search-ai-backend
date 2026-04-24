@@ -4,6 +4,7 @@ from langchain_chroma import Chroma
 import fitz
 from src.services.fix_words_service import fix_words_service
 from src.services.ai_service import ai_service
+from src.services.vector_db_service import vector_db_service
 from src.core.ai_config import CHROMA_DB_DIR
 from src.database import STORAGE_DIR
 from src.models import File
@@ -14,8 +15,8 @@ class PdfService:
     def __init__(
         self, 
         file_id: str, 
-        chunk_size: int = 1000, 
-        chunk_overlap: int = 200
+        chunk_size: int = 600, 
+        chunk_overlap: int = 100
     ):
         self.file_id = file_id
         self.chunk_size = chunk_size
@@ -23,6 +24,7 @@ class PdfService:
 
     async def run(self, session: AsyncSession):
         file_item = await session.get(File, self.file_id)
+        print(f"!!! PdfService START !!! {file_item.stored_name}")
         if not file_item:
             return
         
@@ -32,6 +34,7 @@ class PdfService:
             chunk_overlap=self.chunk_overlap,
             separators=["\n\n", "\n", " ", ""]
         )
+        vector_db_service.get_all_documents()  
 
         try:
             doc = fitz.open(str(stored_path))
@@ -80,17 +83,16 @@ class PdfService:
                         "file_id": str(self.file_id),
                         "page": page_num + 1
                     })
+                if len(texts_to_embed) >= 50:
+                    print(f"DEBUG: Отправляем пачку чанков в базу (страница {page_num+1})")
+                    await vector_db_service.add_texts(texts_to_embed, metadatas)
+                    texts_to_embed = []
+                    metadatas = []  
             
             if texts_to_embed:
-                embeddings = ai_service.get_embeddings()
-                
-                vector_db = Chroma(
-                    collection_name="pdf_documents",
-                    embedding_function=embeddings,
-                    persist_directory=CHROMA_DB_DIR
-                )
-                
-                vector_db.add_texts(texts=texts_to_embed, metadatas=metadatas)
+                print(f"DEBUG: Отправляем пачку чанков в базу (количество чанков {len(texts_to_embed)})")
+                await vector_db_service.add_texts(texts_to_embed, metadatas)
+
 
             file_item.status = "completed"
             await session.commit()
@@ -103,4 +105,5 @@ class PdfService:
         finally:
             if 'doc' in locals():
                 doc.close()
+            vector_db_service.get_all_documents()    
       

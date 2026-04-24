@@ -3,6 +3,7 @@ from src.worker import celery_app, run_async
 from src.models import File
 from src.database import STORAGE_DIR, async_session_maker
 from src.services.pdf_service import PdfService
+from src.services.file_service import file_service
 
 @celery_app.task(name="src.tasks.files.check_file_extension")
 def check_file_extension(file_id: str):
@@ -15,6 +16,10 @@ def extract_file_metadata(file_id: str):
 @celery_app.task(name="src.tasks.files.create_file_embiddings")
 def create_file_embiddings(file_id: str):
     return run_async(_create_embiddings(file_id))
+
+@celery_app.task(name="src.tasks.files.check_is_file_unique")
+def check_is_file_unique(file_id: str):
+    return run_async(_check_is_unique(file_id))
 
 @celery_app.task(name="src.tasks.files.cleanup_after_failure")
 def cleanup_after_failure(request, exc, traceback, file_id):
@@ -37,6 +42,19 @@ async def _check_extension(file_id: str):
 
         await session.commit()
 
+async def _check_is_unique(file_id: str):
+    async with async_session_maker() as session:
+        file_item = await session.get(File, file_id)
+        if not file_item:
+            raise ValueError(f"File not found. Processing stopped.") 
+
+        is_duplicate = await file_service.is_duplicate(session=session, file_id=file_id)
+        if is_duplicate: 
+            file_item.status = "duplicate"
+            await session.commit()
+            raise ValueError(f"File not unique. Processing stopped.") 
+        
+        return f"File {file_id} is unique, continuing..."
 
 async def _extract_metadata(file_id: str):
     async with async_session_maker() as session:

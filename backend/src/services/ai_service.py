@@ -3,6 +3,8 @@ from src.core.ai_config import AI_AGENTS
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.messages import SystemMessage, HumanMessage
 import json
+import asyncio
+
 
 class AIService:
     async def analize(self, agent_id: str, user_query: str):
@@ -22,12 +24,16 @@ class AIService:
             HumanMessage(content=user_query)
         ]
 
-        response = await llm.ainvoke(messages)
+        try:
+            response = await asyncio.wait_for(llm.ainvoke(messages), timeout=200.0)
+        except asyncio.TimeoutError:
+            return {"error": "Ollama timeout"}
         
         try:
             return json.loads(response.content)
         except:
             return response.content
+        
 
     def get_embeddings(self):
         agent = AI_AGENTS.get("embeddings")
